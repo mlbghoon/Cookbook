@@ -584,3 +584,114 @@ body {
 .bn-item.on {
   color: var(--accent);
 }
+.bn-item .ico {
+  transition: transform 0.18s ease;
+}
+.bn-item.on .ico {
+  transform: translateY(-2px) scale(1.15);
+}
+
+/* ───────── 귀여운 미세 인터랙션 ───────── */
+
+/* 헤더 마스코트 살랑살랑 */
+.app-title .mascot {
+  display: inline-block;
+  animation: wiggle 2.8s ease-in-out infinite;
+  transform-origin: 70% 90%;
+}
+@keyframes wiggle {
+  0%,
+  92%,
+  100% {
+    transform: rotate(0deg);
+  }
+  94% {
+    transform: rotate(-14deg);
+  }
+  96% {
+    transform: rotate(12deg);
+  }
+  98% {
+    transform: rotate(-6deg);
+  }
+}
+
+/* 빈 상태 이모지 둥실둥실 */
+.empty .big {
+  display: inline-block;
+  animation: float-bob 2.6s ease-in-out infinite;
+}
+@keyframes float-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-7px);
+  }
+}
+
+/* 카드 누르면 살짝 눌리는 느낌 */
+.card {
+  transition: transform 0.12s ease, border-color 0.15s ease;
+}
+.card:active {
+  transform: scale(0.985);
+  border-color: var(--line-2);
+}
+
+/* 즐겨찾기 별 · 평점 별 — 누르면 통 튀는 느낌 */
+.card-fav,
+.stars button {
+  transition: transform 0.12s ease;
+}
+.card-fav:active {
+  transform: scale(1.4) rotate(8deg);
+}
+.stars button:active {
+  transform: scale(1.35);
+}
+/* 저장된 별은 은은하게 반짝 */
+.card-fav[aria-pressed="true"] {
+  animation: star-pop 0.35s ease;
+}
+@keyframes star-pop {
+  0% {
+    transform: scale(1);
+  }
+  45% {
+    transform: scale(1.45) rotate(12deg);
+  }
+  100% {
+    transform: scale(1) rotate(0);
+  }
+}
+
+/* 버튼 누르는 촉감 */
+.btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+.btn {
+  transition: transform 0.1s ease;
+}
+
+/* 결과 카드가 하나씩 살포시 등장 (스트리밍 체감) */
+.card {
+  animation: card-in 0.32s ease both;
+}
+@keyframes card-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* 사진 없을 때 접시 아이콘도 둥실 */
+.card-ph,
+.detail-hero .ph {
+  animation: float-bob 2.8s ease-in-out infinite;
+}

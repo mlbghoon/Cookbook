@@ -92,14 +92,17 @@ export default function Page() {
     <>
       <header className="app-header">
         <h1 className="app-title">
-          지아의 쿡북<span className="dot">.</span>
+          지아의 쿡북{" "}
+          <span className="mascot" aria-hidden>
+            🍳
+          </span>
         </h1>
         <p className="app-sub">검증된 레시피만, 사진과 함께</p>
       </header>
 
       {!online && (
         <div className="offline-banner">
-          오프라인 — 저장한 레시피만 볼 수 있어요
+          📴 오프라인이에요 — 저장한 레시피는 그대로 볼 수 있어요
         </div>
       )}
 
@@ -149,9 +152,9 @@ export default function Page() {
             {s.status === "idle" && (
               <div className="empty">
                 <div className="big">🍳</div>
-                먹고 싶은 요리를 검색해 보세요.
+                오늘은 뭐가 당겨요?
                 <br />
-                집에 있는 재료를 더하면 더 잘 찾아요.
+                집에 있는 재료를 넣으면 더 잘 찾아드려요.
               </div>
             )}
 

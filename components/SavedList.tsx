@@ -39,9 +39,9 @@ export default function SavedList({
     return (
       <div className="empty">
         <div className="big">⭐</div>
-        아직 저장한 레시피가 없어요.
+        즐겨찾기가 아직 텅 비었어요.
         <br />
-        검색해서 마음에 드는 레시피를 저장해 보세요.
+        마음에 드는 레시피에 ⭐ 콕 찍어두면 여기 모여요.
       </div>
     );
   }
