@@ -45,7 +45,7 @@ npm run build
 우선순위 순:
 
 - [ ] **Vercel 배포** — 프로젝트 Settings → Environment Variables 에 `GEMINI_API_KEY`(+선택 `NAVER_*`) 등록. `docs/` 에 배포 가이드 아직 없음 → 필요시 추가.
-- [ ] **네이버 검색 API 키** 발급해 사진 폴백 켜기 (빠른 모드 사진 품질↑).
+- [ ] **⭐ 내일 할 것 — 네이버 키로 사진 강화** → 상세 실행 계획: [`docs/next-naver-photos.md`](docs/next-naver-photos.md) (키 발급 + `dishKeyword` 검색어 정제 + 테스트).
 - [ ] **저장 사진 리사이즈** — 원본 blob 그대로 저장 중. 많아지면 IndexedDB 용량 부담 → 저장 전 축소.
 - [ ] **백업 내보내기/가져오기 UI** — `recipeStore.exportAll()/importAll()` 는 이미 구현됨, 화면만 없음. 기기 이전용.
 - [ ] **page.tsx 통합 테스트** — 소스 배지 전환, 오프라인 배너, 탭 전환 등 (현재 훅/라우트/컴포넌트 단위 테스트만).
