@@ -49,6 +49,15 @@ describe("recipeStore", () => {
     expect(await recipeStore.getImageBlob(sample.id)).toBeNull();
   });
 
+  it("setImage: 저장 후 사진을 나중에 붙인다(백그라운드 확보)", async () => {
+    await recipeStore.save({ ...sample, savedAt: Date.now() });
+    expect(await recipeStore.getImageBlob(sample.id)).toBeNull();
+    const blob = new Blob(["img"], { type: "image/webp" });
+    await recipeStore.setImage(sample.id, "https://x/y.webp", blob);
+    expect((await recipeStore.getImageBlob(sample.id))?.type).toBe("image/webp");
+    expect((await recipeStore.get(sample.id))?.imageUrl).toBe("https://x/y.webp");
+  });
+
   it("setRating / setNote 반영", async () => {
     await recipeStore.save({ ...sample, savedAt: Date.now() });
     await recipeStore.setRating(sample.id, 4);

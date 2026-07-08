@@ -6,6 +6,7 @@ import IngredientChips from "@/components/IngredientChips";
 import RecipeCard from "@/components/RecipeCard";
 import RecipeDetail from "@/components/RecipeDetail";
 import SavedList from "@/components/SavedList";
+import SearchingIndicator from "@/components/SearchingIndicator";
 import { useRecipeSearch } from "@/lib/useRecipeSearch";
 import { useSavedRecipes } from "@/lib/useSavedRecipes";
 import type { Recipe } from "@/lib/types";
@@ -33,7 +34,7 @@ export default function Page() {
     };
   }, []);
 
-  // 상세 이미지: 저장분이면 오프라인 blob(objectURL) 우선, 아니면 원격 URL
+  // 상세 이미지: 저장분이면 오프라인 blob → 아니면 상세 진입 시 사진을 그때 해석(목록에선 안 부름)
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -44,8 +45,28 @@ export default function Page() {
       if (isSaved(selected.id)) {
         const url = await imageURLOf(selected.id);
         if (alive) setSelectedImg(url ?? selected.imageUrl ?? null);
-      } else {
-        setSelectedImg(selected.imageUrl ?? null);
+        return;
+      }
+      if (selected.imageUrl) {
+        setSelectedImg(selected.imageUrl); // 샘플 등 이미 URL 있는 경우
+        return;
+      }
+      // 상세 열 때 사진 해석 (한 건만)
+      setSelectedImg(null);
+      try {
+        const res = await fetch("/api/photo", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            mode: "resolve",
+            title: selected.title,
+            sourceUrl: selected.sourceUrl,
+          }),
+        });
+        const data = (await res.json()) as { imageUrl?: string | null };
+        if (alive) setSelectedImg(data.imageUrl ?? null);
+      } catch {
+        if (alive) setSelectedImg(null);
       }
     })();
     return () => {
@@ -97,8 +118,14 @@ export default function Page() {
             onRemove={s.removeIngredient}
           />
           <div className="scroll">
-            {s.status === "loading" &&
-              [0, 1, 2].map((i) => <div key={i} className="skeleton" />)}
+            {s.status === "loading" && (
+              <>
+                <SearchingIndicator />
+                {[0, 1, 2].map((i) => (
+                  <div key={i} className="skeleton" />
+                ))}
+              </>
+            )}
 
             {s.status === "error" && (
               <div className="empty">

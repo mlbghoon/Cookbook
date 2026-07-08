@@ -227,6 +227,31 @@ export function normalizeRecipes(rawArray: unknown[]): Recipe[] {
 }
 
 // ─────────────────────────────────────────────────────────────
+// sourceHost — 출처 URL 을 사람이 읽기 좋은 라벨로. 그라운딩 리다이렉트는 친절 라벨.
+// 파싱 실패 시 null.
+// ─────────────────────────────────────────────────────────────
+export function sourceHost(url?: string): string | null {
+  if (!url) return null;
+  try {
+    const u = new URL(url);
+    if (
+      u.hostname.includes("vertexaisearch") ||
+      u.pathname.includes("grounding-api-redirect")
+    ) {
+      return "구글 검색 원문";
+    }
+    return u.hostname.replace(/^www\./, "");
+  } catch {
+    return null;
+  }
+}
+
+// 그라운딩 리다이렉트(opaque) URL 인지 — 그러면 원본 URL 을 그대로 노출하지 않는다.
+export function isRedirectUrl(url?: string): boolean {
+  return sourceHost(url) === "구글 검색 원문";
+}
+
+// ─────────────────────────────────────────────────────────────
 // parseOgImage — HTML 에서 og:image / twitter:image 추출 (순수).
 // 상대경로면 baseUrl 로 절대화. 실패 시 null.
 // ─────────────────────────────────────────────────────────────

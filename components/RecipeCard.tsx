@@ -4,7 +4,8 @@ import type { Recipe } from "@/lib/types";
 
 interface Props {
   recipe: Recipe;
-  imageUrl?: string | null; // 저장 목록은 objectURL 을 넘긴다(이슈 13A: 재요청 없이 재사용)
+  // 저장 목록은 objectURL 을 넘긴다. 검색 리스트는 recipe.imageUrl(백그라운드로 채워짐)을 쓴다.
+  imageUrl?: string | null;
   saved: boolean;
   onOpen: (recipe: Recipe) => void;
   onToggleFav: (recipe: Recipe) => void;

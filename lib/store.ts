@@ -27,6 +27,7 @@ export interface RecipeStore {
   get(id: string): Promise<SavedRecipe | undefined>;
   has(id: string): Promise<boolean>;
   getImageBlob(id: string): Promise<Blob | null>;
+  setImage(id: string, imageUrl: string, blob: Blob | null): Promise<void>;
   setRating(id: string, rating: number): Promise<void>;
   setNote(id: string, note: string): Promise<void>;
   remove(id: string): Promise<void>;
@@ -140,6 +141,16 @@ export const recipeStore: RecipeStore = {
       (s) => s.get(id)
     );
     return rec?.blob ?? null;
+  },
+
+  // 저장된 레시피에 사진을 나중에 붙인다(즐겨찾기 후 백그라운드 확보용)
+  async setImage(id, imageUrl, blob) {
+    const rec = await this.get(id);
+    if (!rec) return;
+    await tx(STORE_RECIPES, "readwrite", (s) => s.put({ ...rec, imageUrl }));
+    if (blob) {
+      await tx(STORE_IMAGES, "readwrite", (s) => s.put({ id, blob }));
+    }
   },
 
   async setRating(id, rating) {

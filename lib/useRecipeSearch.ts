@@ -64,7 +64,7 @@ export function useRecipeSearch() {
     setIngredients((prev) => prev.filter((x) => x !== v));
   }, []);
 
-  // 레시피별 사진을 배치로 해석해 채운다(이미 있으면 스킵).
+  // 레시피 사진을 백그라운드로 해석해 카드에 채운다(텍스트 표시를 막지 않음).
   const resolvePhotos = useCallback((recipes: Recipe[], myId: number) => {
     recipes.forEach(async (r) => {
       if (r.imageUrl) return;
@@ -88,7 +88,7 @@ export function useRecipeSearch() {
           );
         }
       } catch {
-        /* 사진 실패 → 플레이스홀더 */
+        /* 사진 실패 → 플레이스홀더 유지 */
       }
     });
   }, []);

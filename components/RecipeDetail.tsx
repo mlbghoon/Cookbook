@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import type { Recipe } from "@/lib/types";
+import { sourceHost, isRedirectUrl } from "@/lib/prompt";
 import RatingStars from "./RatingStars";
 
 interface Props {
@@ -108,18 +109,31 @@ export default function RecipeDetail({
         )}
 
         {(recipe.source || recipe.sourceUrl) && (
-          <p className="detail-source">
-            출처: {recipe.source}
-            {recipe.sourceUrl && (
+          <div className="detail-footnote">
+            <div className="fn-title">📖 이 레시피의 출처</div>
+            {recipe.source && <div className="fn-source">{recipe.source}</div>}
+            {recipe.sourceUrl ? (
               <>
-                {" "}
-                ·{" "}
-                <a href={recipe.sourceUrl} target="_blank" rel="noreferrer">
-                  원문 보기
+                <a
+                  className="fn-link"
+                  href={recipe.sourceUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {isRedirectUrl(recipe.sourceUrl)
+                    ? "구글 검색 원문 보기 ↗"
+                    : `${sourceHost(recipe.sourceUrl)} 에서 원문 보기 ↗`}
                 </a>
+                {!isRedirectUrl(recipe.sourceUrl) && (
+                  <div className="fn-url">{recipe.sourceUrl}</div>
+                )}
               </>
+            ) : (
+              <div className="fn-note">
+                AI가 추천한 레시피예요 (직접 출처 링크는 없어요).
+              </div>
             )}
-          </p>
+          </div>
         )}
       </div>
 

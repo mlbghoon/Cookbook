@@ -71,41 +71,20 @@ export async function POST(req: NextRequest) {
         controller.close();
       };
 
-      // ── 1단계: 빠른 AI (그라운딩 X, ~4s) ─────────────────
-      let fastCount = 0;
-      const fast = await streamRecipesWithGemini(
-        query,
-        ingredients,
-        { exclude },
-        (r) => {
-          fastCount++;
-          send({ type: "recipe", recipe: r, source: "gemini" });
-        },
-        false
-      );
-      if (fastCount > 0) {
-        send({ type: "done", source: "gemini" });
-        controller.close();
-        return;
-      }
-      if (!fast.ok && fast.retryAfterSec !== undefined) {
-        handleRateLimit(fast.retryAfterSec);
-        return;
-      }
-
-      // ── 2단계: 그라운딩 폴백 (구글 검색, ~15s) ────────────
-      let groundedCount = 0;
+      // ── 검증된 레시피: 그라운딩(구글 검색)으로만 (~15s) ──
+      // 실제 출처가 있는 레시피만 신뢰 → 그라운딩 결과만 사용.
+      let count = 0;
       const grounded = await streamRecipesWithGemini(
         query,
         ingredients,
         { exclude },
         (r) => {
-          groundedCount++;
+          count++;
           send({ type: "recipe", recipe: r, source: "grounded" });
         },
         true
       );
-      if (groundedCount > 0) {
+      if (count > 0) {
         send({ type: "done", source: "grounded" });
         controller.close();
         return;
@@ -115,25 +94,24 @@ export async function POST(req: NextRequest) {
         return;
       }
 
-      // ── 3단계: 기본(샘플) ────────────────────────────────
-      const hadError = !fast.ok || !grounded.ok; // 429 아닌 전송/타임아웃 오류
+      // 검증된 결과 0 → 우리가 큐레이션한 기본(샘플) 레시피로 폴백
       if (exclude.length > 0) {
-        // 더보기: 오류였으면 '더 없음' 아님(버튼 유지), 진짜 빈 경우만 종료
+        // 더보기: 오류면 '더 없음' 아님(버튼 유지), 진짜 빈 경우만 종료
         send(
-          hadError
+          !grounded.ok
             ? {
                 type: "done",
-                source: "gemini",
+                source: "grounded",
                 error: "지금은 더 못 불러왔어요. 잠시 후 다시 눌러주세요.",
               }
-            : { type: "done", source: "gemini" }
+            : { type: "done", source: "grounded" }
         );
       } else {
         emit(matchSamples(query, ingredients), "sample");
         send({
           type: "done",
           source: "sample",
-          error: "AI 레시피를 못 불러와 비슷한 기본 레시피를 보여줘요.",
+          error: "검증된 레시피를 못 찾아서 비슷한 기본 레시피를 보여줘요.",
         });
       }
       controller.close();

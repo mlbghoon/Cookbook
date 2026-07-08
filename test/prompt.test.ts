@@ -7,6 +7,8 @@ import {
   normalizeRecipe,
   normalizeRecipes,
   parseOgImage,
+  sourceHost,
+  isRedirectUrl,
 } from "@/lib/prompt";
 
 describe("recipeId", () => {
@@ -132,6 +134,26 @@ describe("normalizeRecipes", () => {
     ]);
     expect(out).toHaveLength(1);
     expect(out[0].title).toBe("ok");
+  });
+});
+
+describe("sourceHost / isRedirectUrl (출처 푸터)", () => {
+  it("일반 URL 은 www 뗀 호스트명", () => {
+    expect(sourceHost("https://www.10000recipe.com/recipe/123")).toBe(
+      "10000recipe.com"
+    );
+    expect(sourceHost("https://blog.naver.com/chef/1")).toBe("blog.naver.com");
+  });
+  it("그라운딩 리다이렉트는 친절 라벨 + isRedirect true", () => {
+    const u =
+      "https://vertexaisearch.cloud.google.com/grounding-api-redirect/abc";
+    expect(sourceHost(u)).toBe("구글 검색 원문");
+    expect(isRedirectUrl(u)).toBe(true);
+  });
+  it("없거나 잘못된 URL 은 null / false", () => {
+    expect(sourceHost(undefined)).toBeNull();
+    expect(sourceHost("not a url")).toBeNull();
+    expect(isRedirectUrl("https://site.com")).toBe(false);
   });
 });
 

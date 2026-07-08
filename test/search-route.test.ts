@@ -64,7 +64,7 @@ describe("api/search (NDJSON 스트리밍)", () => {
     expect(events.at(-1).error).toBeTruthy();
   });
 
-  it("키 있고 Gemini 스트림 정상이면 recipe source=gemini", async () => {
+  it("키 있고 그라운딩 정상이면 recipe source=grounded (검증됨)", async () => {
     process.env.GEMINI_API_KEY = "test-key";
     const full = '[{"title":"테스트요리","steps":["섞는다"],"source":"셰프"}]';
     global.fetch = vi
@@ -73,27 +73,12 @@ describe("api/search (NDJSON 스트리밍)", () => {
     const events = await readEvents(await POST(req({ query: "아무거나" })));
     const recipes = events.filter((e) => e.type === "recipe");
     expect(recipes).toHaveLength(1);
-    expect(recipes[0].source).toBe("gemini");
-    expect(recipes[0].recipe.title).toBe("테스트요리");
-    expect(events.at(-1)).toMatchObject({ type: "done", source: "gemini" });
-  });
-
-  it("빠른 AI가 비면 그라운딩으로 폴백 → source=grounded", async () => {
-    process.env.GEMINI_API_KEY = "test-key";
-    const empty = "죄송, JSON 없음"; // 파싱 결과 0 → 폴백 유발
-    const full = '[{"title":"검증요리","steps":["끓인다"],"source":"셰프"}]';
-    global.fetch = vi
-      .fn()
-      .mockResolvedValueOnce({ ok: true, status: 200, body: sseBody(empty) }) // 빠른 AI
-      .mockResolvedValueOnce({ ok: true, status: 200, body: sseBody(full) }) as any; // 그라운딩
-    const events = await readEvents(await POST(req({ query: "김치찌개" })));
-    const recipes = events.filter((e) => e.type === "recipe");
-    expect(recipes).toHaveLength(1);
     expect(recipes[0].source).toBe("grounded");
+    expect(recipes[0].recipe.title).toBe("테스트요리");
     expect(events.at(-1)).toMatchObject({ type: "done", source: "grounded" });
   });
 
-  it("Gemini 실패면 샘플로 폴백(done sample)", async () => {
+  it("검증된 결과가 없으면 샘플로 폴백(done sample)", async () => {
     process.env.GEMINI_API_KEY = "test-key";
     global.fetch = vi
       .fn()
@@ -125,7 +110,7 @@ describe("api/search (NDJSON 스트리밍)", () => {
       await POST(req({ query: "김치찌개", exclude: ["백종원 김치찌개"] }))
     );
     expect(events.filter((e) => e.type === "recipe")).toHaveLength(0);
-    expect(events.at(-1)).toMatchObject({ type: "done", source: "gemini" });
+    expect(events.at(-1)).toMatchObject({ type: "done", source: "grounded" });
     expect(events.at(-1).error).toBeTruthy();
   });
 });

@@ -50,35 +50,63 @@ export function useSavedRecipes() {
     };
   }, []);
 
-  const save = useCallback(
-    async (recipe: Recipe, input: SaveInput = {}) => {
-      // 사진 blob 확보: imageUrl 을 서버 프록시(download)로 받아 CORS 없이 저장
-      let imageBlob: Blob | null = null;
-      if (recipe.imageUrl) {
-        try {
-          const res = await fetch("/api/photo", {
+  // 사진을 (필요시 resolve →) download 해서 저장된 레시피에 붙인다.
+  const attachPhoto = useCallback(
+    async (recipe: Recipe) => {
+      try {
+        let imageUrl = recipe.imageUrl;
+        if (!imageUrl) {
+          const r = await fetch("/api/photo", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ mode: "download", url: recipe.imageUrl }),
+            body: JSON.stringify({
+              mode: "resolve",
+              title: recipe.title,
+              sourceUrl: recipe.sourceUrl,
+            }),
           });
-          if (res.ok) imageBlob = await res.blob();
-        } catch {
-          /* 사진 없이 저장 */
+          imageUrl = ((await r.json()) as { imageUrl?: string | null }).imageUrl ?? undefined;
+          if (!imageUrl) return;
         }
+        const dl = await fetch("/api/photo", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mode: "download", url: imageUrl }),
+        });
+        if (!dl.ok) return;
+        const blob = await dl.blob();
+        await recipeStore.setImage(recipe.id, imageUrl, blob);
+        // 캐시된 objectURL 회수 후 목록 갱신 → 썸네일 표시
+        const stale = urlMap.current.get(recipe.id);
+        if (stale) {
+          URL.revokeObjectURL(stale);
+          urlMap.current.delete(recipe.id);
+        }
+        await refresh();
+      } catch {
+        /* 사진 없이도 저장은 유지 */
       }
+    },
+    [refresh]
+  );
+
+  const save = useCallback(
+    async (recipe: Recipe, input: SaveInput = {}) => {
+      // 1) 레코드 먼저 저장 → ⭐ 즉시 반영 (사진은 백그라운드)
       await recipeStore.save(
         { ...recipe, savedAt: Date.now(), ...input },
-        { rating: input.rating, note: input.note, imageBlob }
+        { rating: input.rating, note: input.note, imageBlob: null }
       );
-      // 사진이 바뀌었을 수 있으니 캐시된 objectURL 회수
       const stale = urlMap.current.get(recipe.id);
       if (stale) {
         URL.revokeObjectURL(stale);
         urlMap.current.delete(recipe.id);
       }
       await refresh();
+      // 2) 사진은 뒤이어 확보 (blocking 하지 않음)
+      void attachPhoto(recipe);
     },
-    [refresh]
+    [refresh, attachPhoto]
   );
 
   const remove = useCallback(
