@@ -136,6 +136,60 @@ describe("useRecipeSearch 스트리밍 + 레이스 방지 (이슈 6A)", () => {
     expect(result.current.exhausted).toBe(true);
   });
 
+  it("HTTP 오류면 empty가 아니라 error 상태", async () => {
+    global.fetch = vi.fn(async () => ({ ok: false, status: 500, headers: { get: () => null } }) as any) as any;
+
+    const { result } = renderHook(() => useRecipeSearch());
+    await act(async () => {
+      result.current.search();
+      await sleep(40);
+    });
+    expect(result.current.status).toBe("error");
+    expect(result.current.error).toBeTruthy();
+    expect(result.current.results).toEqual([]);
+  });
+
+  it("더보기 실패 시 기존 결과 유지 + error 메시지", async () => {
+    let call = 0;
+    global.fetch = vi.fn(async (_url: any, opts: any) => {
+      const body = JSON.parse(opts.body);
+      if (body.mode === "resolve")
+        return { ok: true, json: async () => ({ imageUrl: null }) } as any;
+      call++;
+      if (call === 1) {
+        return {
+          ok: true,
+          body: ndjson(
+            [
+              {
+                type: "recipe",
+                recipe: { id: "1", title: "하나", ingredients: [], steps: ["a"] },
+                source: "gemini",
+              },
+              { type: "done", source: "gemini" },
+            ],
+            5
+          ),
+        } as any;
+      }
+      return { ok: false, status: 500, headers: { get: () => null } } as any;
+    }) as any;
+
+    const { result } = renderHook(() => useRecipeSearch());
+    await act(async () => {
+      result.current.search();
+      await sleep(40);
+    });
+    expect(result.current.results.map((r) => r.id)).toEqual(["1"]);
+
+    await act(async () => {
+      result.current.loadMore();
+      await sleep(40);
+    });
+    expect(result.current.results.map((r) => r.id)).toEqual(["1"]);
+    expect(result.current.error).toBeTruthy();
+  });
+
   it("재료 추가/삭제 (중복 무시)", () => {
     const { result } = renderHook(() => useRecipeSearch());
     act(() => {

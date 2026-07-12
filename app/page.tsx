@@ -7,6 +7,7 @@ import RecipeCard from "@/components/RecipeCard";
 import RecipeDetail from "@/components/RecipeDetail";
 import SavedList from "@/components/SavedList";
 import SearchingIndicator from "@/components/SearchingIndicator";
+import { apiHeaders } from "@/lib/apiClient";
 import { useRecipeSearch } from "@/lib/useRecipeSearch";
 import { useSavedRecipes } from "@/lib/useSavedRecipes";
 import type { Recipe } from "@/lib/types";
@@ -56,7 +57,7 @@ export default function Page() {
       try {
         const res = await fetch("/api/photo", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: apiHeaders(),
           body: JSON.stringify({
             mode: "resolve",
             title: selected.title,

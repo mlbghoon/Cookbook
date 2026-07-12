@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { guardApi } from "@/lib/apiGuard.server";
 import { resolvePhoto, downloadImage } from "@/lib/photo.server";
 import type { PhotoResolveResponse } from "@/lib/types";
 
@@ -6,6 +7,10 @@ import type { PhotoResolveResponse } from "@/lib/types";
 //  resolve  { mode:"resolve", title, sourceUrl? } → { imageUrl: string|null }
 //  download { mode:"download", url }              → 이미지 바이트 스트림(동일출처)
 export async function POST(req: NextRequest) {
+  // 사진 프록시/스크랩 남용 완화
+  const blocked = guardApi(req, { name: "photo", limit: 60 });
+  if (blocked) return blocked;
+
   let body: unknown;
   try {
     body = await req.json();
@@ -34,7 +39,7 @@ export async function POST(req: NextRequest) {
   }
 
   // 기본: resolve 모드
-  const title = typeof b.title === "string" ? b.title : "";
+  const title = typeof b.title === "string" ? b.title.slice(0, 200) : "";
   const sourceUrl = typeof b.sourceUrl === "string" ? b.sourceUrl : undefined;
   if (!title.trim()) {
     return NextResponse.json({ imageUrl: null } satisfies PhotoResolveResponse);

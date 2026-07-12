@@ -1,9 +1,14 @@
-import { describe, it, expect, afterEach, vi } from "vitest";
+import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { POST } from "@/app/api/search/route";
+import {
+  API_SECRET_HEADER,
+  _clearRateLimitForTest,
+} from "@/lib/apiGuard.server";
 
-function req(body: unknown) {
+function req(body: unknown, headers?: Record<string, string>) {
   return new Request("http://localhost/api/search", {
     method: "POST",
+    headers: { "Content-Type": "application/json", ...headers },
     body: JSON.stringify(body),
   }) as any;
 }
@@ -39,9 +44,16 @@ function sseBody(fullText: string, chunks = 2) {
 }
 
 const origKey = process.env.GEMINI_API_KEY;
+const origSecret = process.env.COOKBOOK_API_SECRET;
+beforeEach(() => {
+  _clearRateLimitForTest();
+  delete process.env.COOKBOOK_API_SECRET;
+});
 afterEach(() => {
   if (origKey) process.env.GEMINI_API_KEY = origKey;
   else delete process.env.GEMINI_API_KEY;
+  if (origSecret) process.env.COOKBOOK_API_SECRET = origSecret;
+  else delete process.env.COOKBOOK_API_SECRET;
   vi.restoreAllMocks();
 });
 
@@ -76,6 +88,10 @@ describe("api/search (NDJSON 스트리밍)", () => {
     expect(recipes[0].source).toBe("grounded");
     expect(recipes[0].recipe.title).toBe("테스트요리");
     expect(events.at(-1)).toMatchObject({ type: "done", source: "grounded" });
+    // Gemini 키는 쿼리가 아니라 헤더로
+    const call = (global.fetch as any).mock.calls[0];
+    expect(String(call[0])).not.toContain("key=");
+    expect(call[1].headers["x-goog-api-key"]).toBe("test-key");
   });
 
   it("검증된 결과가 없으면 샘플로 폴백(done sample)", async () => {
@@ -112,5 +128,21 @@ describe("api/search (NDJSON 스트리밍)", () => {
     expect(events.filter((e) => e.type === "recipe")).toHaveLength(0);
     expect(events.at(-1)).toMatchObject({ type: "done", source: "grounded" });
     expect(events.at(-1).error).toBeTruthy();
+  });
+
+  it("COOKBOOK_API_SECRET 있으면 헤더 없으면 401", async () => {
+    process.env.COOKBOOK_API_SECRET = "s3cret";
+    delete process.env.GEMINI_API_KEY;
+    const res = await POST(req({ query: "김치찌개" }));
+    expect(res.status).toBe(401);
+  });
+
+  it("COOKBOOK_API_SECRET 있으면 올바른 헤더로 통과", async () => {
+    process.env.COOKBOOK_API_SECRET = "s3cret";
+    delete process.env.GEMINI_API_KEY;
+    const events = await readEvents(
+      await POST(req({ query: "김치찌개" }, { [API_SECRET_HEADER]: "s3cret" }))
+    );
+    expect(events.some((e) => e.type === "recipe")).toBe(true);
   });
 });

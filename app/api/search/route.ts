@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { guardApi } from "@/lib/apiGuard.server";
 import { hasGeminiKey, streamRecipesWithGemini } from "@/lib/gemini.server";
 import { matchSamples } from "@/lib/sampleRecipes";
 import type { Recipe, RecipeSource } from "@/lib/types";
@@ -10,6 +11,10 @@ export const maxDuration = 60;
 //  {"type":"recipe","recipe":{...},"source":"gemini"|"grounded"|"sample"}
 //  {"type":"done","source":...,"error"?:...,"retryAfter"?:sec}
 export async function POST(req: NextRequest) {
+  // Gemini 비용 보호: 분당 10회/IP (비밀 키 설정 시 추가 인증)
+  const blocked = guardApi(req, { name: "search", limit: 10 });
+  if (blocked) return blocked;
+
   let body: unknown;
   try {
     body = await req.json();
@@ -21,12 +26,18 @@ export async function POST(req: NextRequest) {
     ingredients?: unknown;
     exclude?: unknown;
   };
-  const query = typeof b.query === "string" ? b.query : "";
+  const query = typeof b.query === "string" ? b.query.slice(0, 200) : "";
   const ingredients = Array.isArray(b.ingredients)
-    ? b.ingredients.filter((x): x is string => typeof x === "string")
+    ? b.ingredients
+        .filter((x): x is string => typeof x === "string")
+        .map((s) => s.slice(0, 40))
+        .slice(0, 20)
     : [];
   const exclude = Array.isArray(b.exclude)
-    ? b.exclude.filter((x): x is string => typeof x === "string")
+    ? b.exclude
+        .filter((x): x is string => typeof x === "string")
+        .map((s) => s.slice(0, 120))
+        .slice(0, 40)
     : [];
 
   const encoder = new TextEncoder();
@@ -58,7 +69,7 @@ export async function POST(req: NextRequest) {
       const handleRateLimit = (waitSec: number) => {
         const msg = `AI 사용량이 잠깐 초과됐어요. ${waitSec}초 후 다시 시도해줘.`;
         if (exclude.length > 0) {
-          send({ type: "done", source: "gemini", error: msg, retryAfter: waitSec });
+          send({ type: "done", source: "grounded", error: msg, retryAfter: waitSec });
         } else {
           emit(matchSamples(query, ingredients), "sample");
           send({

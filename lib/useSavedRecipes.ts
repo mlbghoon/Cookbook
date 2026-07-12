@@ -3,6 +3,7 @@
 // IndexedDB 접근은 마운트 후에만 (이슈 2A).
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { apiHeaders } from "./apiClient";
 import { recipeStore } from "./store";
 import type { Recipe, SavedRecipe } from "./types";
 
@@ -58,19 +59,20 @@ export function useSavedRecipes() {
         if (!imageUrl) {
           const r = await fetch("/api/photo", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: apiHeaders(),
             body: JSON.stringify({
               mode: "resolve",
               title: recipe.title,
               sourceUrl: recipe.sourceUrl,
             }),
           });
+          if (!r.ok) return;
           imageUrl = ((await r.json()) as { imageUrl?: string | null }).imageUrl ?? undefined;
           if (!imageUrl) return;
         }
         const dl = await fetch("/api/photo", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: apiHeaders(),
           body: JSON.stringify({ mode: "download", url: imageUrl }),
         });
         if (!dl.ok) return;

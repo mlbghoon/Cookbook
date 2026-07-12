@@ -7,6 +7,8 @@ next-env.d.ts
 
 # env
 .env*.local
+.env.vercel
+!.env.local.example
 
 # os / editor
 .DS_Store
@@ -14,3 +16,4 @@ next-env.d.ts
 npm-debug.log*
 .vscode
 .idea
+.vercel

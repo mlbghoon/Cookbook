@@ -4,6 +4,7 @@ import {
   _clearPhotoCacheForTest,
   isSafePublicHttpUrl,
 } from "@/lib/photo.server";
+import { _clearRateLimitForTest } from "@/lib/apiGuard.server";
 
 function req(body: unknown) {
   return new Request("http://localhost/api/photo", {
@@ -14,8 +15,17 @@ function req(body: unknown) {
 
 const bytes = (s: string) => new TextEncoder().encode(s).buffer;
 
-beforeEach(() => _clearPhotoCacheForTest());
-afterEach(() => vi.restoreAllMocks());
+const origSecret = process.env.COOKBOOK_API_SECRET;
+beforeEach(() => {
+  _clearPhotoCacheForTest();
+  _clearRateLimitForTest();
+  delete process.env.COOKBOOK_API_SECRET;
+});
+afterEach(() => {
+  if (origSecret) process.env.COOKBOOK_API_SECRET = origSecret;
+  else delete process.env.COOKBOOK_API_SECRET;
+  vi.restoreAllMocks();
+});
 
 describe("isSafePublicHttpUrl (SSRF 방어 — #1)", () => {
   it("공개 https/http 는 허용", () => {
@@ -30,11 +40,16 @@ describe("isSafePublicHttpUrl (SSRF 방어 — #1)", () => {
     expect(isSafePublicHttpUrl("http://172.16.0.1/x")).toBe(false);
     expect(isSafePublicHttpUrl("http://169.254.169.254/latest")).toBe(false);
     expect(isSafePublicHttpUrl("http://foo.local/x")).toBe(false);
+    expect(isSafePublicHttpUrl("http://2130706433/")).toBe(false); // 10진 127.0.0.1
+    expect(isSafePublicHttpUrl("http://0.0.0.0/")).toBe(false);
+    expect(isSafePublicHttpUrl("http://[::1]/")).toBe(false);
+    expect(isSafePublicHttpUrl("http://[::ffff:127.0.0.1]/")).toBe(false);
   });
-  it("http/https 가 아닌 스킴은 차단", () => {
+  it("http/https 가 아닌 스킴·userinfo 는 차단", () => {
     expect(isSafePublicHttpUrl("file:///etc/passwd")).toBe(false);
     expect(isSafePublicHttpUrl("ftp://host/x")).toBe(false);
     expect(isSafePublicHttpUrl("not a url")).toBe(false);
+    expect(isSafePublicHttpUrl("https://user:pass@site.com/x")).toBe(false);
   });
 });
 
@@ -43,6 +58,7 @@ describe("api/photo", () => {
     const html = `<meta property="og:image" content="https://site.com/a.jpg">`;
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
+      status: 200,
       url: "https://site.com/r",
       headers: { get: (k: string) => (k === "content-type" ? "text/html" : null) },
       arrayBuffer: async () => bytes(html),
@@ -51,6 +67,37 @@ describe("api/photo", () => {
       req({ mode: "resolve", title: "김치찌개", sourceUrl: "https://site.com/r" })
     );
     expect((await res.json()).imageUrl).toBe("https://site.com/a.jpg");
+  });
+
+  it("resolve: og:image 가 내부 주소면 null (SSRF)", async () => {
+    const html = `<meta property="og:image" content="http://169.254.169.254/latest">`;
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: { get: (k: string) => (k === "content-type" ? "text/html" : null) },
+      arrayBuffer: async () => bytes(html),
+    }) as any;
+    const res = await POST(
+      req({ mode: "resolve", title: "x", sourceUrl: "https://site.com/r" })
+    );
+    expect((await res.json()).imageUrl).toBeNull();
+  });
+
+  it("resolve: 리다이렉트가 사설 IP 로 가면 fetch 중단", async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 302,
+      headers: {
+        get: (k: string) =>
+          k === "location" ? "http://127.0.0.1/secret" : null,
+      },
+    }) as any;
+    const res = await POST(
+      req({ mode: "resolve", title: "x", sourceUrl: "https://site.com/r" })
+    );
+    expect((await res.json()).imageUrl).toBeNull();
+    // 첫 hop 만 호출되고, 사설 location 으로는 이어가지 않음
+    expect(global.fetch).toHaveBeenCalledTimes(1);
   });
 
   it("resolve: 내부 주소 sourceUrl 은 fetch 안 하고 null (SSRF 차단)", async () => {
@@ -75,6 +122,7 @@ describe("api/photo", () => {
   it("download: 이미지 바이트를 동일출처로 스트림", async () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
+      status: 200,
       headers: {
         get: (k: string) => (k === "content-type" ? "image/png" : null),
       },
@@ -96,6 +144,7 @@ describe("api/photo", () => {
   it("download: 이미지가 아니면 404", async () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
+      status: 200,
       headers: { get: () => "text/html" },
       arrayBuffer: async () => new ArrayBuffer(0),
     }) as any;

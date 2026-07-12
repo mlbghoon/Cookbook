@@ -56,9 +56,13 @@ export async function streamRecipesWithGemini(
 
   let res: Response;
   try {
-    res = await fetch(`${STREAM_ENDPOINT}?alt=sse&key=${key}`, {
+    // 키는 쿼리가 아니라 헤더로 — 프록시/CDN 액세스 로그 유출 방지
+    res = await fetch(`${STREAM_ENDPOINT}?alt=sse`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": key,
+      },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
         ...(grounding ? { tools: [{ google_search: {} }] } : {}),

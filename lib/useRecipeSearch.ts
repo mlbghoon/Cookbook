@@ -4,6 +4,7 @@
 // 레이트리밋 쿨다운(재시도 대기).
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { apiHeaders } from "./apiClient";
 import type { Recipe, RecipeSource, SearchEvent } from "./types";
 
 export type SearchStatus = "idle" | "loading" | "done" | "empty" | "error";
@@ -13,6 +14,12 @@ interface StreamMeta {
   source: Source | null;
   error: string | null;
   retryAfter?: number;
+}
+
+function httpErrorMessage(status: number): string {
+  if (status === 401) return "앱 설정이 필요해요. API 보호 키를 확인해 주세요.";
+  if (status === 429) return "요청이 많아요. 잠시 후 다시 시도해 주세요.";
+  return "레시피를 불러오지 못했어요. 다시 시도해 주세요.";
 }
 
 export function useRecipeSearch() {
@@ -71,13 +78,14 @@ export function useRecipeSearch() {
       try {
         const res = await fetch("/api/photo", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: apiHeaders(),
           body: JSON.stringify({
             mode: "resolve",
             title: r.title,
             sourceUrl: r.sourceUrl,
           }),
         });
+        if (!res.ok) return;
         const data = (await res.json()) as { imageUrl?: string | null };
         if (myId !== reqIdRef.current) return;
         if (data.imageUrl) {
@@ -106,41 +114,50 @@ export function useRecipeSearch() {
       if (!reader) return meta;
       const decoder = new TextDecoder();
       let buf = "";
+
+      const handleLine = async (line: string): Promise<boolean> => {
+        const trimmed = line.trim();
+        if (!trimmed) return true;
+        if (myId !== reqIdRef.current) {
+          try {
+            await reader.cancel();
+          } catch {
+            /* 무시 */
+          }
+          return false;
+        }
+        let msg: SearchEvent;
+        try {
+          msg = JSON.parse(trimmed) as SearchEvent;
+        } catch {
+          return true;
+        }
+        if (msg.type === "recipe" && msg.recipe) {
+          if (!seen.has(msg.recipe.id)) {
+            seen.add(msg.recipe.id);
+            onRecipe(msg.recipe, msg.source ?? "gemini");
+          }
+        } else if (msg.type === "done") {
+          meta.source = msg.source ?? meta.source;
+          meta.error = msg.error ?? null;
+          meta.retryAfter = msg.retryAfter;
+        }
+        return true;
+      };
+
       for (;;) {
         const { done, value } = await reader.read();
         if (done) break;
         buf += decoder.decode(value, { stream: true });
         let nl: number;
         while ((nl = buf.indexOf("\n")) >= 0) {
-          const line = buf.slice(0, nl).trim();
+          const line = buf.slice(0, nl);
           buf = buf.slice(nl + 1);
-          if (!line) continue;
-          if (myId !== reqIdRef.current) {
-            try {
-              await reader.cancel();
-            } catch {
-              /* 무시 */
-            }
-            return meta;
-          }
-          let msg: SearchEvent;
-          try {
-            msg = JSON.parse(line) as SearchEvent;
-          } catch {
-            continue;
-          }
-          if (msg.type === "recipe" && msg.recipe) {
-            if (!seen.has(msg.recipe.id)) {
-              seen.add(msg.recipe.id);
-              onRecipe(msg.recipe, msg.source ?? "gemini");
-            }
-          } else if (msg.type === "done") {
-            meta.source = msg.source ?? meta.source;
-            meta.error = msg.error ?? null;
-            meta.retryAfter = msg.retryAfter;
-          }
+          if (!(await handleLine(line))) return meta;
         }
       }
+      // 마지막 줄에 개행이 없으면 꼬리 버퍼도 처리
+      if (buf.trim()) await handleLine(buf);
       return meta;
     },
     []
@@ -164,10 +181,20 @@ export function useRecipeSearch() {
     try {
       const res = await fetch("/api/search", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: apiHeaders(),
         body: JSON.stringify({ query, ingredients }),
         signal: ac.signal,
       });
+      if (!res.ok) {
+        if (myId !== reqIdRef.current) return;
+        const ra = Number(res.headers.get("retry-after"));
+        if (res.status === 429 && Number.isFinite(ra) && ra > 0) {
+          startCooldown(ra);
+        }
+        setStatus("error");
+        setError(httpErrorMessage(res.status));
+        return;
+      }
       const meta = await consume(res, myId, seen, (r, src) => {
         appended++;
         setSource(src);
@@ -206,9 +233,18 @@ export function useRecipeSearch() {
     try {
       const res = await fetch("/api/search", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: apiHeaders(),
         body: JSON.stringify({ query, ingredients, exclude }),
       });
+      if (!res.ok) {
+        if (myId !== reqIdRef.current) return;
+        const ra = Number(res.headers.get("retry-after"));
+        if (res.status === 429 && Number.isFinite(ra) && ra > 0) {
+          startCooldown(ra);
+        }
+        setError(httpErrorMessage(res.status));
+        return;
+      }
       const meta = await consume(res, myId, seen, (r) => {
         appended++;
         setResults((prev) => [...prev, r]);
@@ -223,7 +259,8 @@ export function useRecipeSearch() {
         setError(null);
       }
     } catch {
-      /* 조용히 무시(기존 결과 유지) */
+      if (myId !== reqIdRef.current) return;
+      setError("더 불러오지 못했어요. 잠시 후 다시 눌러 주세요.");
     } finally {
       setLoadingMore(false);
     }

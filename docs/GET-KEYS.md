@@ -46,5 +46,24 @@ Google Gemini. 무료 한도가 넉넉하고(무료 등급 분당 요청 제한 
 ## 보안 메모
 
 - 모든 키는 **서버 전용**(`process.env`)이라 클라이언트 번들에 포함되지 않는다.
+  (예외: `NEXT_PUBLIC_COOKBOOK_API_SECRET` — API 보호용으로만, Gemini/네이버 키와 다름)
 - `.env.local` 은 `.gitignore` 에 포함되어 커밋되지 않는다.
 - Vercel 배포 시에는 프로젝트 **Settings → Environment Variables** 에 동일 키를 등록한다.
+
+---
+
+## 3) `COOKBOOK_API_SECRET` (+ `NEXT_PUBLIC_…`) — API 보호 (공개 배포 시 권장)
+
+`/api/search`, `/api/photo` 가 인터넷에 열려 Gemini 할당량을 소모하지 않게 막는다.
+
+1. 랜덤 문자열 생성 (예: `openssl rand -hex 24`)
+2. `.env.local` (및 Vercel env)에 **같은 값**으로 둘 다 넣는다:
+   ```
+   COOKBOOK_API_SECRET=생성한값
+   NEXT_PUBLIC_COOKBOOK_API_SECRET=생성한값
+   ```
+3. 서버가 `x-cookbook-secret` 헤더를 검사하고, 앱이 같은 값을 보낸다.
+4. 둘 다 비우면 보호가 꺼진다(로컬·테스트 기본).
+5. Vercel에 `NEXT_PUBLIC_*` 를 추가/변경한 뒤에는 **재배포**가 필요하다(빌드 시 인라인).
+
+추가로 IP당 분당 레이트리밋도 적용된다(검색 10회 · 사진 60회). 비밀과 별개로 항상 동작한다.
